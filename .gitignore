@@ -1,0 +1,13 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+crash.*.log
+backend_override.tf
+
+# Avoiding any credentials from being commited. Even though we'll use Workload Identity Federation for exactly this reason
+*.json
+.env
