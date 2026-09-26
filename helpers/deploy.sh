@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # To get the help as suggested by best practices from GCP documentation: bash helpers/deploy.sh --help
 set -euo pipefail
-export MSYS_NO_PATHCONV=1
 
 usage() {
   cat <<'EOF'
@@ -36,7 +35,19 @@ bootstrap() {
   local vars=(-var "project_id=$PROJECT" -var "environment=$ENV")
   vars+=(${EXTRA[@]+"${EXTRA[@]}"})
 
-  if [ ! -f "$ENV.tfstate" ] && gcloud storage buckets describe "gs://$STATE_BUCKET" --project "$PROJECT" >/dev/null 2>&1; then
+  # Does the state bucket exist? Only "not found" means a first run.
+  # Any other gcloud error (not logged in, gcloud broken...) stops here.
+  local check bucket_exists=0
+  if check=$(gcloud storage buckets describe "gs://$STATE_BUCKET" --project "$PROJECT" --format="value(name)" 2>&1); then
+    bucket_exists=1
+  elif ! grep -qiE "not found|404" <<<"$check"; then
+    echo "Could not check gs://$STATE_BUCKET:"
+    echo "$check"
+    exit 1
+  fi
+
+  if [ ! -f "$ENV.tfstate" ] && [ "$bucket_exists" = 1 ]; then
+  # Normal re-run: state already lives in the bucket.
     terraform init -input=false -reconfigure -backend-config="bucket=$STATE_BUCKET" -backend-config="prefix=bootstrap"
     terraform apply $APPROVE "${vars[@]}"
   else
