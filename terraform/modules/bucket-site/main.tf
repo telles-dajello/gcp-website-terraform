@@ -73,8 +73,7 @@ resource "google_compute_backend_bucket" "main" {
   }
 }
 
-# Private bucket access: only the load balancer's Google-managed service
-# agent may read objects. Google's docs require objectViewer for it, and only that.
+# Private bucket access: only the load balancer's Google-managed service agent may read objects. Google's docs require objectViewer for it, and only that.
 data "google_project" "main" {
   project_id = var.project_id
 }

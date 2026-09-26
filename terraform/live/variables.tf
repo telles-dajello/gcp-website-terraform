@@ -35,3 +35,33 @@ variable "enable_cdn" {
   type        = bool
   default     = true
 }
+
+# Approach B - Compute Engine regional MIG (nginx) + Cloud Load Balancing + Cloud NAT
+variable "enable_vm_site" {
+  description = "Deploy approach B (managed instance group)."
+  type        = bool
+  default     = true
+}
+
+variable "machine_type" {
+  description = "VM machine type for approach B."
+  type        = string
+  default     = "e2-micro"
+}
+
+variable "instance_count" {
+  description = "Number of VMs for approach B."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.instance_count >= 1 && var.instance_count <= 10
+    error_message = "instance_count must be between 1 and 10."
+  }
+}
+
+variable "log_sample_rate" {
+  description = "Fraction of LB requests to log for approach B."
+  type        = number
+  default     = 1.0
+}
