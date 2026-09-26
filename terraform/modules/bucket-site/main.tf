@@ -67,7 +67,6 @@ resource "google_compute_backend_bucket" "main" {
       cache_mode        = "FORCE_CACHE_ALL" # required for private buckets
       default_ttl       = 3600
       client_ttl        = 60
-      max_ttl           = 86400
       negative_caching  = true
       serve_while_stale = 86400
     }
