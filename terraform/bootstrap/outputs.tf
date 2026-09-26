@@ -12,3 +12,8 @@ output "vm_service_account" {
   description = "Identity used by VMs in approach B."
   value       = google_service_account.vm.email
 }
+
+output "workload_identity_provider" {
+  description = "GitHub environment variable GCP_WIF_PROVIDER."
+  value       = google_iam_workload_identity_pool_provider.main.name
+}
