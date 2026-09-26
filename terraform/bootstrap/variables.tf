@@ -22,3 +22,14 @@ variable "github_repository_id" {
     error_message = "github_repository_id must be the numeric repository ID, not owner/repo."
   }
 }
+
+variable "dns_domain" {
+  description = "your-domain.com (from DOMAIN=...). Empty = no Cloud DNS zone."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.dns_domain == "" || can(regex("^[a-z0-9-]+(\\.[a-z0-9-]+)+$", var.dns_domain))
+    error_message = "dns_domain must be a bare domain like your-domain.com (lowercase, no https://, no trailing dot)."
+  }
+}

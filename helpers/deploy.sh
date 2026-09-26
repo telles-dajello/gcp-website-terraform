@@ -6,6 +6,7 @@ usage() {
   cat <<'EOF'
 Usage:
   PROJECT=<gcp-project-id> ENV=<dev|prod> GITHUB_REPO=<owner/repo> bash helpers/deploy.sh bootstrap   # once per project
+  add DOMAIN=<your-domain.com> only in prod, to create the Cloud DNS zone; after using, use it on every re-run.
   bash helpers/deploy.sh --help   # this text
 EOF
 }
@@ -42,6 +43,7 @@ bootstrap() {
 
   cd "$ROOT/terraform/bootstrap"
   local vars=(-var "project_id=$PROJECT" -var "environment=$ENV" -var "github_repository=$GITHUB_REPO" -var "github_repository_id=$repo_id")
+  [ -n "${DOMAIN:-}" ] && vars+=(-var "dns_domain=$DOMAIN")
   vars+=(${EXTRA[@]+"${EXTRA[@]}"})
 
   # Does the state bucket exist? Only "not found" means a first run.

@@ -17,3 +17,8 @@ output "workload_identity_provider" {
   description = "GitHub environment variable GCP_WIF_PROVIDER."
   value       = google_iam_workload_identity_pool_provider.main.name
 }
+
+output "dns_name_servers" {
+  description = "Type these into your domain registrar as custom name servers (once)."
+  value       = try(google_dns_managed_zone.main[0].name_servers, [])
+}
