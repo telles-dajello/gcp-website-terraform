@@ -7,7 +7,11 @@ usage() {
 Usage:
   PROJECT=<gcp-project-id> ENV=<dev|prod> GITHUB_REPO=<owner/repo> bash helpers/deploy.sh bootstrap   # once per project
   add DOMAIN=<your-domain.com> only in prod, to create the Cloud DNS zone; after using, use it on every re-run.
+  PROJECT=<gcp-project-id> ENV=<dev|prod> bash helpers/deploy.sh plan|apply|destroy|output [extra terraform args]
   bash helpers/deploy.sh --help   # this text
+
+Per-project parameters (region, machine type, domains...) live in terraform/envs/<ENV>.tfvars.
+Set AUTO_APPROVE=1 to skip the "yes" prompt (for the CI).
 EOF
 }
 
@@ -17,7 +21,7 @@ EXTRA=("$@") # anything after the command goes to terraform unchanged
 
 case "$CMD" in
   -h | --help | help) usage; exit 0 ;;
-  bootstrap) ;;
+  bootstrap | plan | apply | destroy | output) ;;
   *) usage >&2; exit 1 ;;
 esac
 
@@ -27,8 +31,11 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 : "${ENV:?set ENV to dev or prod}"
 
 STATE_BUCKET="$PROJECT-tfstate"
+ENV_FILE="$ROOT/terraform/envs/$ENV.tfvars"
 APPROVE=""
 [ "${AUTO_APPROVE:-0}" = "1" ] && APPROVE="-input=false -auto-approve"
+
+[ -f "$ENV_FILE" ] || { echo "No settings file $ENV_FILE"; exit 1; }
 
 # bootstrap: APIs, state bucket, service accounts, IAM, WIF
 bootstrap() {
@@ -76,6 +83,27 @@ bootstrap() {
   terraform output
 }
 
+# live: the website
+live_init() {
+  cd "$ROOT/terraform/live"
+  terraform init -input=false -reconfigure -backend-config="bucket=$STATE_BUCKET" -backend-config="prefix=live" >/dev/null
+}
+
+LIVE_VARS=(-var "project_id=$PROJECT" -var "environment=$ENV" -var-file="../envs/$ENV.tfvars")
+
+# After an apply, clear the CDN cache so a changed page shows up right away.
+invalidate_cdn() {
+  local url_map
+  url_map=$(terraform output -raw bucket_site_url_map 2>/dev/null || true)
+  if [ -n "$url_map" ]; then
+    gcloud compute url-maps invalidate-cdn-cache "$url_map" --path "/*" --global --async --project "$PROJECT"
+  fi
+}
+
 case "$CMD" in
   bootstrap) bootstrap ;;
+  plan)      live_init; terraform plan -input=false "${LIVE_VARS[@]}" ${EXTRA[@]+"${EXTRA[@]}"} ;;
+  apply)     live_init; terraform apply $APPROVE "${LIVE_VARS[@]}" ${EXTRA[@]+"${EXTRA[@]}"}; invalidate_cdn; terraform output ;;
+  destroy)   live_init; terraform destroy $APPROVE "${LIVE_VARS[@]}" ${EXTRA[@]+"${EXTRA[@]}"} ;;
+  output)    live_init; terraform output ;;
 esac
