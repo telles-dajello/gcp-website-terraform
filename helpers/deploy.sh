@@ -8,6 +8,7 @@ Usage:
   PROJECT=<gcp-project-id> ENV=<dev|prod> GITHUB_REPO=<owner/repo> bash helpers/deploy.sh bootstrap   # once per project
   add DOMAIN=<your-domain.com> only in prod, to create the Cloud DNS zone; after using, use it on every re-run.
   PROJECT=<gcp-project-id> ENV=<dev|prod> bash helpers/deploy.sh plan|apply|destroy|output [extra terraform args]
+  bash helpers/deploy.sh test # no project, no credentials, no cost
   bash helpers/deploy.sh --help   # this text
 
 Per-project parameters (region, machine type, domains...) live in terraform/envs/<ENV>.tfvars.
@@ -21,11 +22,25 @@ EXTRA=("$@") # anything after the command goes to terraform unchanged
 
 case "$CMD" in
   -h | --help | help) usage; exit 0 ;;
-  bootstrap | plan | apply | destroy | output) ;;
+  bootstrap | plan | apply | destroy | output | test) ;;
   *) usage >&2; exit 1 ;;
 esac
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
+
+# test: runs before anything else, needs no project
+if [ "$CMD" = "test" ]; then
+  cd "$ROOT/terraform/live"
+  terraform init -input=false -backend=false -test-directory=tests/modules >/dev/null
+  echo ">> Module tests (stable IP, TLS, auto-redeploy, security)"
+  terraform test -test-directory=tests/modules
+  for e in dev prod; do
+    echo ">> Settings guardrails: $e"
+    terraform test -test-directory=tests/settings \
+      -var-file="../envs/$e.tfvars" -var "project_id=test-project" -var "environment=$e"
+  done
+  exit 0
+fi
 
 : "${PROJECT:?set PROJECT to your Google Cloud project ID}"
 : "${ENV:?set ENV to dev or prod}"
