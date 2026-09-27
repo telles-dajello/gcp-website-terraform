@@ -1,0 +1,118 @@
+name: deploy
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+    paths: ["terraform/**", "site/**", "helpers/**", ".github/workflows/**"]
+
+permissions:
+  contents: read
+  id-token: write # lets the job request a GitHub OIDC token for WIF
+
+env:
+  TF_IN_AUTOMATION: "1" # Terraform tunes its output for pipelines (HashiCorp: "Running Terraform in automation")
+
+jobs:
+  # dev: develop branch
+  plan-dev:
+    if: github.event_name == 'pull_request' && github.base_ref == 'develop'
+    runs-on: ubuntu-latest
+    environment: dev
+    concurrency: tf-dev
+    env:
+      PROJECT: ${{ vars.GCP_PROJECT_ID }}
+      ENV: dev
+    steps:
+      - uses: actions/checkout@v7
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false # keep `terraform output -raw` clean for helpers/deploy.sh
+      - run: terraform fmt -check -recursive terraform
+      - run: bash helpers/deploy.sh test
+      - run: bash helpers/deploy.sh plan
+
+  apply-dev:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    environment: dev
+    concurrency: tf-dev # never two applies on the same state
+    env:
+      PROJECT: ${{ vars.GCP_PROJECT_ID }}
+      ENV: dev
+      AUTO_APPROVE: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+      - run: bash helpers/deploy.sh test
+      - run: bash helpers/deploy.sh apply
+
+  # prod: main branch
+  # Promotion to prod only comes from develop (what dev already runs) or from a hotfix/* branch. Anything else fails here, before any prod credentials exist.
+  promotion-source:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only develop or hotfix/* may be merged into main
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          case "$HEAD_REF" in
+            develop|hotfix/*) echo "OK: $HEAD_REF -> main" ;;
+            *) echo "::error::Open the PR into develop first; main only takes develop or hotfix/*"; exit 1 ;;
+          esac
+
+  plan-prod:
+    needs: promotion-source
+    runs-on: ubuntu-latest
+    environment: prod # required reviewers approve before this job gets prod credentials
+    concurrency: tf-prod
+    env:
+      PROJECT: ${{ vars.GCP_PROJECT_ID }}
+      ENV: prod
+    steps:
+      - uses: actions/checkout@v7
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+      - run: terraform fmt -check -recursive terraform
+      - run: bash helpers/deploy.sh test
+      - run: bash helpers/deploy.sh plan
+
+  apply-prod:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: prod # required reviewers must approve before this job gets credentials
+    concurrency: tf-prod
+    env:
+      PROJECT: ${{ vars.GCP_PROJECT_ID }}
+      ENV: prod
+      AUTO_APPROVE: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+      - run: bash helpers/deploy.sh test
+      - run: bash helpers/deploy.sh apply
