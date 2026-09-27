@@ -4,7 +4,7 @@
 locals {
   site_dir = "${path.root}/../../site"
 
-    # Created by bootstrap (deterministic name).
+  # Created by bootstrap (deterministic name).
   vm_service_account_email = "web-vm@${var.project_id}.iam.gserviceaccount.com"
 
   labels = {
@@ -35,6 +35,7 @@ module "bucket_frontend" {
   project_id = var.project_id
   name       = "bucket-${var.environment}"
   backend_id = module.bucket_site[0].backend_id
+  domains    = var.bucket_site_domains
   labels     = local.labels
 }
 
@@ -66,5 +67,6 @@ module "vm_frontend" {
   project_id = var.project_id
   name       = "vm-${var.environment}"
   backend_id = module.vm_site[0].backend_id
+  domains    = var.vm_site_domains
   labels     = local.labels
 }

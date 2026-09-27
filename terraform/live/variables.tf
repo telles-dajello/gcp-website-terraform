@@ -65,3 +65,22 @@ variable "log_sample_rate" {
   type        = number
   default     = 1.0
 }
+
+# Domains and DNS
+variable "bucket_site_domains" {
+  description = "Domains for approach A's certificate. Empty = HTTP on the IP only."
+  type        = list(string)
+  default     = []
+}
+
+variable "vm_site_domains" {
+  description = "Domains for approach B's certificate. Empty = HTTP on the IP only."
+  type        = list(string)
+  default     = []
+}
+
+variable "manage_dns" {
+  description = "Create A records for the site domains in the Cloud DNS zone made by bootstrap (DOMAIN=...)."
+  type        = bool
+  default     = false
+}

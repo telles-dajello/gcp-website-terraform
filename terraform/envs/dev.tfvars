@@ -11,3 +11,8 @@ enable_vm_site  = true
 machine_type    = "e2-micro"
 instance_count  = 1
 log_sample_rate = 1.0
+
+# No domain and no TLS in dev: served on http://<ip>
+bucket_site_domains = []
+vm_site_domains     = []
+manage_dns          = false

@@ -22,3 +22,8 @@ output "vm_site_ip" {
   description = "Approach B stable IP."
   value       = one(module.vm_frontend[*].ip_address)
 }
+
+output "dns_records" {
+  description = "A records managed by Terraform (domain - IP)."
+  value       = local.dns_records
+}

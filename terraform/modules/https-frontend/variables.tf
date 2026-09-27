@@ -18,3 +18,9 @@ variable "labels" {
   type        = map(string)
   default     = {}
 }
+
+variable "domains" {
+  description = "Domains for the managed certificate. Empty list = HTTP only on the IP."
+  type        = list(string)
+  default     = []
+}
