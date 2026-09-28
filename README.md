@@ -89,7 +89,7 @@ gh pr create --base main --head develop --title "release: change title" --body "
 
 CI runs the same `helpers/deploy.sh` as a person would, and Terraform decides what to redeploy. On the same IPs, approach A shows the change within a minute, because the deploy clears the CDN cache (see [Google Cloud: Invalidate cached content](https://docs.cloud.google.com/cdn/docs/invalidating-cached-content)), and approach B after the rolling update, a few minutes later.
 
-There is a trade-off of having environment branches. Two pull requests necessary per change, and the risk of the branches drifting apart, since hotfixes go from `hotfix/*` into `main` and need to be merged back into `develop` straight away to avoid drift..
+There is a trade-off of having environment branches. Two pull requests necessary per change, and the risk of the branches drifting apart, since hotfixes go from `hotfix/*` into `main` and need to be merged back into `develop` straight away to avoid drift.
 
 ### Reproduce it: dev in five commands
 
@@ -115,7 +115,7 @@ export PROJECT=<your-prod-project-id> ENV=prod   GITHUB_REPO=telles-dajello/gcp-
 bash helpers/deploy.sh bootstrap   # also creates the Cloud DNS zone and prints dns_name_servers
 #   then you need to set those four name servers at your domain registrar (only once)
 #   after that put www.your-domain.com and vm.your-domain.com in terraform/envs/prod.tfvars
-bash helpers/deploy.sh apply       # certificates, HTTPS, redirect, DNS records; HTTPS will be live in about 15 min later
+bash helpers/deploy.sh apply       # certificates, HTTPS, redirect, DNS records; HTTPS will be live in about 15 min
 
 
 
@@ -200,14 +200,14 @@ A and B share one frontend module: a reserved IP (see [Google Cloud: Reserve a s
 - GKE runs a whole cluster for one static page (see [Google Cloud: Google Kubernetes Engine pricing](https://cloud.google.com/kubernetes-engine/pricing)). An HTML change would need an image build, a registry and a rollout.
 - Cloud Run has no servers and scales to zero, but static files would need a container image built outside Terraform. HTTPS on my own domain needs either a load balancer (the same fixed cost as A) or domain mapping, which is in Preview and "not production-ready" (see [Google Cloud: Mapping custom domains](https://docs.cloud.google.com/run/docs/mapping-custom-domains)). It is the strongest runner-up.
 
-I also rejected some variants inside the these products:
+I also rejected some variants inside these products:
 
-- A public bucket alone has no HTTPS on my domain, and the bucket must be public.
+- - Serving the site straight from the bucket, without a load balancer. Cloud Storage serves a custom domain only over HTTP, and every file would have to be public. I wanted HTTPS and a private bucket, so the load balancer was needed.
 - A single VM is one point of failure, with downtime on every redeploy.
 
 ### Security
 
-- No keys anywhere. CI logs in through GitHub's OIDC token and Workload Identity Federation, getting a short-lived token for a deployer service account. As Google recommends over service account keys (see [Google Cloud: Best practices for managing service account keys](https://docs.cloud.google.com/iam/docs/best-practices-for-managing-service-account-keys)). The GitHub variables only name the project, the service account and the provider. None of them is a secret.
+- No keys anywhere. CI logs in through GitHub's OIDC token and Workload Identity Federation, getting a short-lived token for a deployer service account, as Google recommends over service account keys (see [Google Cloud: Best practices for managing service account keys](https://docs.cloud.google.com/iam/docs/best-practices-for-managing-service-account-keys)). The GitHub variables only name the project, the service account and the provider. None of them is a secret.
 - Each project's WIF provider only accepts tokens from this repository, matched by its numeric ID rather than its name (see [Google Cloud: Configure Workload Identity Federation with deployment pipelines](https://docs.cloud.google.com/iam/docs/workload-identity-federation-with-deployment-pipelines)), and from jobs running in the matching GitHub environment. Prod's environment requires my approval.
 - Least privilege. The deployer has the narrowest predefined roles for load balancing, compute, network, security and storage, and no IAM or owner roles (see [Google Cloud: Use IAM securely](https://docs.cloud.google.com/iam/docs/using-iam-securely)). It can't create service accounts or grant roles: I create those once in bootstrap, as project Owner. Two of its permissions are limited to a single resource instead of the whole project. It can start VMs only as the VM service account, which can only write logs. It can manage DNS records only in the site's own zone.
 - Private by default. The bucket enforces public access prevention and only the load balancer can read it. The VMs have no public IPs. The state buckets are private and versioned.
@@ -257,19 +257,19 @@ My monthly estimates from Google's pricing pages.
 | Total | | ≈ US$23/month | ≈ US$50/month |
 
 - The load balancer is the fixed cost, even with no traffic. A and B share it in each project, and HTTPS adds nothing: prod's 4 forwarding rules stay inside the first 5 that are billed together.
-- Approach A alone would be about US$18/month, The only cost that grows with traffic is the CDN's charge for the data it sends to users.
+- Approach A alone would be about US$18/month. The only cost that grows with traffic is the CDN's charge for the data it sends to users.
 - Approach B adds the VMs and NAT. A pre-built VM image would remove NAT and save about US$5/month per environment. But this would involve more build steps outside Terraform.
 
 ## Time spent
 
-| Day | Learning (h) | Building (h) | Notes |
+| Day | Reasearching (h) | Building (h) | Notes |
 | --- | --- | --- | --- |
 | Wednesday | 3-4h | - | Listing documentation and preparing reading plan |
-| Wednesday | 3-4h | - | Reading and reviewn system design and infra best practices |
-| Thursday | 3-4h | - | Organizing building plan as reading went |
+| Wednesday | 3-4h | - | Reading and reviewing system design and infra best practices |
+| Thursday | 3-4h | - | Organizing building plan as reading went along |
 | Friday | 1-2h | 2h | Accounts, projects, domain, tools, Terraform basics, choosing the approaches, repository setup |
 | Saturday | 3h | 7h | Bootstrap for dev and prod, WIF, DNS. Both approaches in dev and prod, HTTPS, tests, CI |
 | Sunday | | 1h | CI demonstration, README |
 | Total | 13-17h | 10h | |
 
-- Most of my time has been reviewn documentation and reviewing system design trade-offs to decide on the approaches. The hours building are the literal time with hands on keyboard to make it happen.
+- Most of my time has been reviewing documentation and reviewing system design trade-offs to decide on the approaches. The hours building are the literal time with hands on keyboard to make it happen.
